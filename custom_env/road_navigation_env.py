@@ -56,10 +56,11 @@ class RoadNavigationEnv(gym.Env):
         self.goal_pos = np.array(self.destinations[self.current_goal])
 
         self.steps = 0
-        self.max_steps = 200
+        self.max_steps = 300  # Increased due to complex paths
 
-        print(
-            f" New episode: Agent at {tuple(self.agent_pos)} → Goal {self.current_goal} at {tuple(self.goal_pos)}"
+        # Initialize distance tracking for reward calculation
+        self.previous_distance = np.abs(self.agent_pos[0] - self.goal_pos[0]) + np.abs(
+            self.agent_pos[1] - self.goal_pos[1]
         )
 
         return self._get_obs(), {}
@@ -98,15 +99,31 @@ class RoadNavigationEnv(gym.Env):
         # Check if goal reached
         done = np.array_equal(self.agent_pos, self.goal_pos)
 
-        # Calculate reward
+        # Calculate reward with distance-based incentives
         if done:
-            reward = 10  # Large reward for reaching goal
-            print(f"Goal {self.current_goal} reached in {self.steps} steps!")
+            # Success reward based on efficiency
+            efficiency_bonus = max(0, (self.max_steps - self.steps) // 10)
+            reward = 10 + efficiency_bonus  # Base success + efficiency bonus
+            # Success message handled by main script
         else:
-            # Small negative reward for each step to encourage efficiency
-            reward = -1
+            # Distance-based reward to encourage progress
+            current_distance = np.abs(self.agent_pos[0] - self.goal_pos[0]) + np.abs(
+                self.agent_pos[1] - self.goal_pos[1]
+            )
 
-            # Additional penalty for hitting walls (trying invalid moves)
+            # Base step penalty
+            reward = -0.5
+
+            # Distance-based incentive (very small to avoid greedy behavior)
+            if hasattr(self, "previous_distance"):
+                if current_distance < self.previous_distance:
+                    reward += 1  # Small reward for getting closer
+                elif current_distance > self.previous_distance:
+                    reward -= 1  # Small penalty for moving away
+
+            self.previous_distance = current_distance
+
+            # Penalty for hitting walls (trying invalid moves)
             if action in moves:
                 delta = moves[action]
                 attempted_pos = self.agent_pos + delta
@@ -118,7 +135,7 @@ class RoadNavigationEnv(gym.Env):
             done = True
             if not np.array_equal(self.agent_pos, self.goal_pos):
                 reward = -10  # Penalty for not reaching goal in time
-                print(f"Time limit reached! Goal not achieved.")
+                # Timeout message handled by main script
 
         return (
             self._get_obs(),
