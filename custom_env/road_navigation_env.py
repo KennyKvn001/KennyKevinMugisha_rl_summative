@@ -59,7 +59,7 @@ class RoadNavigationEnv(gym.Env):
         self.max_steps = 200
 
         print(
-            f"🎯 New episode: Agent at {tuple(self.agent_pos)} → Goal {self.current_goal} at {tuple(self.goal_pos)}"
+            f" New episode: Agent at {tuple(self.agent_pos)} → Goal {self.current_goal} at {tuple(self.goal_pos)}"
         )
 
         return self._get_obs(), {}
@@ -101,7 +101,7 @@ class RoadNavigationEnv(gym.Env):
         # Calculate reward
         if done:
             reward = 10  # Large reward for reaching goal
-            print(f"🎉 Goal {self.current_goal} reached in {self.steps} steps!")
+            print(f"Goal {self.current_goal} reached in {self.steps} steps!")
         else:
             # Small negative reward for each step to encourage efficiency
             reward = -1
@@ -117,8 +117,8 @@ class RoadNavigationEnv(gym.Env):
         if self.steps >= self.max_steps:
             done = True
             if not np.array_equal(self.agent_pos, self.goal_pos):
-                reward = -50  # Penalty for not reaching goal in time
-                print(f"⏰ Time limit reached! Goal not achieved.")
+                reward = -10  # Penalty for not reaching goal in time
+                print(f"Time limit reached! Goal not achieved.")
 
         return (
             self._get_obs(),
