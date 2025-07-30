@@ -8,12 +8,12 @@ from custom_env import MapNavigationEnv
 
 
 def main():
-    """Main road navigation game"""
-    print(" MAP NAVIGATION GAME")
-    print("=" * 40)
+    """Main map navigation game with enhanced visuals"""
+    print(" MAP NAVIGATION - ENHANCED EDITION")
+    print("=" * 50)
 
-    # Create environment with larger grid for complex road network
-    env = MapNavigationEnv(grid_size=(20, 20), render_mode="human")
+    # Create environment with enhanced visual effects
+    env = MapNavigationEnv(grid_size=(18, 18), render_mode="human", training_mode=False)
 
     # Reset environment
     obs, info = env.reset()
@@ -84,14 +84,14 @@ def main():
             next_goal_index = info["goals_completed"]
             if next_goal_index < len(info["mission_goals"]):
                 next_goal = info["mission_goals"][next_goal_index]
-                print(f"    🎯 GOAL REACHED! → Next: {next_goal.upper()}")
+                print(f"    GOAL REACHED! → Next: {next_goal.upper()}")
             else:
-                print(f"    🎯 GOAL REACHED!")
+                print(f"    GOAL REACHED!")
 
         if done:
             if reward > 0:
                 efficiency_bonus = max(0, (env.max_steps - env.steps) // 20)
-                print(f"\n 🏆 MISSION COMPLETE! All destinations visited!")
+                print(f"\n MISSION COMPLETE! All destinations visited!")
                 print(
                     f" Route completed: {' → '.join([g.upper() for g in info['mission_goals']])}"
                 )
@@ -118,12 +118,12 @@ def main():
 
     print(f"\n Performance Summary:")
     if done and reward > 0:
-        print(" 🏆 FULL MISSION SUCCESS - All destinations reached!")
+        print(" FULL MISSION SUCCESS - All destinations reached!")
         print(f" Destinations visited: {info['goals_completed']}/{info['total_goals']}")
         print(f" Efficiency: {info['steps']}/{env.max_steps} steps")
         print(f" Final Score: {total_reward:.1f} points")
     else:
-        print(" 📈 Training opportunity - multi-destination navigation required")
+        print(" Training opportunity - multi-destination navigation required")
         print(
             f" Mission progress: {info.get('goals_completed', 0)}/{info.get('total_goals', 3)} destinations"
         )

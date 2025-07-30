@@ -13,11 +13,17 @@ from custom_env.renderer import Renderer
 
 
 class MapNavigationEnv(gym.Env):
-    def __init__(self, grid_size=(15, 15), render_mode="human"):
+    def __init__(self, grid_size=(15, 15), render_mode="human", training_mode=False):
         super(MapNavigationEnv, self).__init__()
         self.grid_size = grid_size
         self.render_mode = render_mode
-        self.renderer = Renderer(grid_size) if render_mode == "human" else None
+        self.training_mode = training_mode
+
+        # Enhanced renderer with visual effects
+        if render_mode == "human" and not training_mode:
+            self.renderer = Renderer(grid_size)
+        else:
+            self.renderer = None
 
         # Action space: 0=up, 1=down, 2=left, 3=right
         self.action_space = spaces.Discrete(4)
@@ -97,8 +103,23 @@ class MapNavigationEnv(gym.Env):
         """Take a step in the environment"""
         self.steps += 1
 
+        # Initialize info dictionary
+        info = {
+            "goal": self.current_goal,
+            "steps": self.steps,
+            "agent_pos": tuple(self.agent_pos),
+            "goal_pos": tuple(self.goal_pos),
+            "goals_completed": self.goals_completed,
+            "total_goals": len(self.mission_goals),
+            "mission_goals": self.mission_goals,
+            "goal_reached": False,
+        }
+
         # Define movement directions
         moves = {0: (-1, 0), 1: (1, 0), 2: (0, -1), 3: (0, 1)}  # up, down, left, right
+
+        # Initialize reward for this step
+        reward = -0.5  # Small penalty for each step to encourage efficiency
 
         if action in moves:
             delta = moves[action]
@@ -106,8 +127,13 @@ class MapNavigationEnv(gym.Env):
 
             # Check if new position is valid (on road or destination)
             if is_valid_position(self.road_map, tuple(new_pos)):
+                # Valid move - update agent position
                 self.agent_pos = new_pos
-            # If invalid move, agent stays in place (no movement)
+            else:
+                # Invalid move - agent hits obstacle/wall
+                reward -= 5.0  # Penalty for hitting obstacles
+                info["invalid_move"] = True
+                # Agent stays in current position
 
         # Check if current goal reached
         current_goal_reached = np.array_equal(self.agent_pos, self.goal_pos)
@@ -115,6 +141,10 @@ class MapNavigationEnv(gym.Env):
 
         # Calculate reward with distance-based incentives
         if current_goal_reached:
+            # Trigger celebration effects
+            if self.renderer:
+                self.renderer.trigger_goal_celebration(self.goal_pos)
+
             # Goal completed! Give reward and check if mission complete
             self.goals_completed += 1
             goal_reward = 15  # Reward for reaching a destination
@@ -132,21 +162,20 @@ class MapNavigationEnv(gym.Env):
                 ) + np.abs(self.agent_pos[1] - self.goal_pos[1])
 
                 reward = goal_reward  # Intermediate goal reward
+                info["goal_reached"] = True
             else:
                 # Mission complete! All goals visited
                 efficiency_bonus = max(0, (self.max_steps - self.steps) // 20)
                 reward = 50 + efficiency_bonus  # Large completion bonus
                 done = True
+                info["mission_complete"] = True
         else:
             # Distance-based reward to encourage progress
             current_distance = np.abs(self.agent_pos[0] - self.goal_pos[0]) + np.abs(
                 self.agent_pos[1] - self.goal_pos[1]
             )
 
-            # Base step penalty
-            reward = -0.5
-
-            # Distance-based incentive (very small to avoid greedy behavior)
+            # Distance-based incentive (modify existing reward from beginning)
             if hasattr(self, "previous_distance"):
                 if current_distance < self.previous_distance:
                     reward += 1  # Small reward for getting closer
@@ -155,13 +184,6 @@ class MapNavigationEnv(gym.Env):
 
             self.previous_distance = current_distance
 
-            # Penalty for hitting walls (trying invalid moves)
-            if action in moves:
-                delta = moves[action]
-                attempted_pos = self.agent_pos + delta
-                if not is_valid_position(self.road_map, tuple(attempted_pos)):
-                    reward = -5  # Penalty for trying to move into obstacle
-
         # Episode ends if goal reached or max steps exceeded
         if self.steps >= self.max_steps:
             done = True
@@ -169,28 +191,51 @@ class MapNavigationEnv(gym.Env):
                 reward = -10  # Penalty for not reaching goal in time
                 # Timeout message handled by main script
 
+        # Validate agent position (safety check)
+        if not is_valid_position(self.road_map, tuple(self.agent_pos)):
+            print(
+                f"WARNING: Agent at invalid position {tuple(self.agent_pos)}! Map value: {self.road_map[self.agent_pos[0], self.agent_pos[1]]}"
+            )
+            # Force agent back to a valid position (nearest destination)
+            self.agent_pos = np.array(random.choice(list(self.destinations.values())))
+            reward -= 10  # Heavy penalty for position error
+            info["position_corrected"] = True
+
+        # Update info dictionary with final values
+        info.update(
+            {
+                "agent_pos": tuple(self.agent_pos),
+                "goal_pos": tuple(self.goal_pos),
+                "goals_completed": self.goals_completed,
+                "goal_reached": current_goal_reached,
+            }
+        )
+
         return (
             self._get_obs(),
             reward,
             done,
             False,
-            {
-                "goal": self.current_goal,
-                "steps": self.steps,
-                "agent_pos": tuple(self.agent_pos),
-                "goal_pos": tuple(self.goal_pos),
-                "goals_completed": self.goals_completed,
-                "total_goals": len(self.mission_goals),
-                "mission_goals": self.mission_goals,
-                "goal_reached": current_goal_reached,
-            },
+            info,
         )
 
     def render(self):
-        """Render the environment"""
+        """Render the environment with enhanced visual effects"""
         if self.renderer:
+            # Prepare info for enhanced UI
+            info = {
+                "goals_completed": self.goals_completed,
+                "total_goals": len(self.mission_goals),
+                "mission_goals": self.mission_goals,
+                "current_step": self.steps,
+                "max_steps": self.max_steps,
+            }
             self.renderer.render(
-                self.road_map, self.agent_pos, self.destinations, self.current_goal
+                self.road_map,
+                self.agent_pos,
+                self.destinations,
+                self.current_goal,
+                info,
             )
 
     def close(self):
