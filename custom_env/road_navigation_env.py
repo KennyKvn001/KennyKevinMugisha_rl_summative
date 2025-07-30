@@ -46,13 +46,26 @@ class RoadNavigationEnv(gym.Env):
         # Place agent at a random destination
         self.agent_pos = np.array(random.choice(list(self.destinations.values())))
 
-        # Choose a different destination as goal
-        available_goals = [
-            name
-            for name, pos in self.destinations.items()
-            if not np.array_equal(pos, self.agent_pos)
-        ]
-        self.current_goal = random.choice(available_goals)
+        # Create a sequence of goals to visit (3-4 destinations)
+        all_destinations = list(self.destinations.keys())
+        start_dest = None
+        for name, pos in self.destinations.items():
+            if np.array_equal(pos, self.agent_pos):
+                start_dest = name
+                break
+
+        # Remove starting destination and create goal sequence
+        available_goals = [name for name in all_destinations if name != start_dest]
+
+        # Create mission: visit 3 destinations in sequence
+        self.mission_goals = random.sample(
+            available_goals, min(3, len(available_goals))
+        )
+        self.current_goal_index = 0
+        self.goals_completed = 0
+
+        # Set first goal
+        self.current_goal = self.mission_goals[self.current_goal_index]
         self.goal_pos = np.array(self.destinations[self.current_goal])
 
         self.steps = 0
@@ -96,15 +109,34 @@ class RoadNavigationEnv(gym.Env):
                 self.agent_pos = new_pos
             # If invalid move, agent stays in place (no movement)
 
-        # Check if goal reached
-        done = np.array_equal(self.agent_pos, self.goal_pos)
+        # Check if current goal reached
+        current_goal_reached = np.array_equal(self.agent_pos, self.goal_pos)
+        done = False
 
         # Calculate reward with distance-based incentives
-        if done:
-            # Success reward based on efficiency
-            efficiency_bonus = max(0, (self.max_steps - self.steps) // 10)
-            reward = 10 + efficiency_bonus  # Base success + efficiency bonus
-            # Success message handled by main script
+        if current_goal_reached:
+            # Goal completed! Give reward and check if mission complete
+            self.goals_completed += 1
+            goal_reward = 15  # Reward for reaching a destination
+
+            # Check if all goals in mission are completed
+            if self.current_goal_index < len(self.mission_goals) - 1:
+                # Move to next goal in sequence
+                self.current_goal_index += 1
+                self.current_goal = self.mission_goals[self.current_goal_index]
+                self.goal_pos = np.array(self.destinations[self.current_goal])
+
+                # Update distance tracking for new goal
+                self.previous_distance = np.abs(
+                    self.agent_pos[0] - self.goal_pos[0]
+                ) + np.abs(self.agent_pos[1] - self.goal_pos[1])
+
+                reward = goal_reward  # Intermediate goal reward
+            else:
+                # Mission complete! All goals visited
+                efficiency_bonus = max(0, (self.max_steps - self.steps) // 20)
+                reward = 50 + efficiency_bonus  # Large completion bonus
+                done = True
         else:
             # Distance-based reward to encourage progress
             current_distance = np.abs(self.agent_pos[0] - self.goal_pos[0]) + np.abs(
@@ -147,6 +179,10 @@ class RoadNavigationEnv(gym.Env):
                 "steps": self.steps,
                 "agent_pos": tuple(self.agent_pos),
                 "goal_pos": tuple(self.goal_pos),
+                "goals_completed": self.goals_completed,
+                "total_goals": len(self.mission_goals),
+                "mission_goals": self.mission_goals,
+                "goal_reached": current_goal_reached,
             },
         )
 

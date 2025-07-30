@@ -18,9 +18,10 @@ def main():
     # Reset environment
     obs, info = env.reset()
 
-    print(f" Mission: Reach {env.current_goal.upper()}")
-    print(f" Start: {tuple(env.agent_pos)} → Goal: {tuple(env.goal_pos)}")
-    print(f"  Max steps: {env.max_steps}")
+    print(f" MULTI-DESTINATION MISSION:")
+    print(f" Route: {' → '.join([g.upper() for g in env.mission_goals])}")
+    print(f" Start: {tuple(env.agent_pos)} | First Goal: {env.current_goal.upper()}")
+    print(f" Max steps: {env.max_steps}")
 
     # Show initial state
     env.render()
@@ -65,27 +66,43 @@ def main():
 
         total_reward += reward
 
-        # Clean action/reward display
+        # Clean action/reward display with mission progress
         distance = abs(env.agent_pos[0] - env.goal_pos[0]) + abs(
             env.agent_pos[1] - env.goal_pos[1]
         )
-        status = f"Dist:{distance:2d}"
+        mission_progress = f"{info['goals_completed']}/{info['total_goals']}"
+        status = (
+            f"Goal:{env.current_goal[:4].upper()} {mission_progress} D:{distance:2d}"
+        )
 
         print(
             f"{step+1:3d}   | {action_symbol:4s} | {str(tuple(env.agent_pos)):8s} | {reward:+6.2f} | {status}"
         )
 
+        # Check for goal completion message
+        if info.get("goal_reached", False) and not done:
+            next_goal_index = info["goals_completed"]
+            if next_goal_index < len(info["mission_goals"]):
+                next_goal = info["mission_goals"][next_goal_index]
+                print(f"    🎯 GOAL REACHED! → Next: {next_goal.upper()}")
+            else:
+                print(f"    🎯 GOAL REACHED!")
+
         if done:
             if reward > 0:
-                efficiency_bonus = max(0, (env.max_steps - env.steps) // 10)
+                efficiency_bonus = max(0, (env.max_steps - env.steps) // 20)
+                print(f"\n 🏆 MISSION COMPLETE! All destinations visited!")
                 print(
-                    f"\n SUCCESS! Reached {env.current_goal.upper()} in {info['steps']} steps!"
+                    f" Route completed: {' → '.join([g.upper() for g in info['mission_goals']])}"
                 )
                 print(
-                    f" Total Reward: {total_reward:.1f} (includes +{efficiency_bonus} efficiency bonus)"
+                    f" Total steps: {info['steps']} | Efficiency bonus: +{efficiency_bonus}"
                 )
+                print(f" Total Reward: {total_reward:.1f}")
             else:
-                print(f"\n TIME OUT! Goal not reached in {env.max_steps} steps.")
+                print(
+                    f"\n TIME OUT! Mission incomplete ({info['goals_completed']}/{info['total_goals']} goals)"
+                )
                 print(f" Total Reward: {total_reward:.1f}")
             break
 
@@ -93,18 +110,25 @@ def main():
 
     if not done:
         print(f"\n Demo ended. Agent at {tuple(env.agent_pos)}")
-        print(f" Goal {env.current_goal.upper()} at {tuple(env.goal_pos)}")
+        print(f" Current Goal: {env.current_goal.upper()} at {tuple(env.goal_pos)}")
+        print(
+            f" Mission Progress: {info['goals_completed']}/{info['total_goals']} destinations"
+        )
         print(f" Total Reward so far: {total_reward:.1f}")
 
     print(f"\n Performance Summary:")
     if done and reward > 0:
-        print(" Mission completed successfully")
+        print(" 🏆 FULL MISSION SUCCESS - All destinations reached!")
+        print(f" Destinations visited: {info['goals_completed']}/{info['total_goals']}")
         print(f" Efficiency: {info['steps']}/{env.max_steps} steps")
-        print(f" Score: {total_reward:.1f} points")
+        print(f" Final Score: {total_reward:.1f} points")
     else:
-        print(" Training opportunity - complex navigation required")
+        print(" 📈 Training opportunity - multi-destination navigation required")
+        print(
+            f" Mission progress: {info.get('goals_completed', 0)}/{info.get('total_goals', 3)} destinations"
+        )
         print(f" Current progress: {env.steps}/{env.max_steps} steps")
-        print(f" Distance to goal: {distance} tiles")
+        print(f" Distance to current goal: {distance} tiles")
 
     # Keep window open
     print(f"\nKeeping window open for 3 seconds...")

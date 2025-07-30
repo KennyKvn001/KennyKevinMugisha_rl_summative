@@ -45,8 +45,9 @@ def test_complexity():
     )
 
     # Calculate path complexity
-    print(f"\n🎯 Current Mission: {env.current_goal.upper()}")
-    print(f"Start: {tuple(env.agent_pos)} → Goal: {tuple(env.goal_pos)}")
+    print(f"\n🎯 MULTI-DESTINATION MISSION:")
+    print(f"Route: {' → '.join([g.upper() for g in env.mission_goals])}")
+    print(f"Start: {tuple(env.agent_pos)} | Current Goal: {env.current_goal.upper()}")
     print(
         f"Manhattan Distance: {np.abs(env.agent_pos[0] - env.goal_pos[0]) + np.abs(env.agent_pos[1] - env.goal_pos[1])}"
     )
