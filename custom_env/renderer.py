@@ -477,9 +477,7 @@ class Renderer:
     def _draw_header(self, info):
         """Draw header with game title and stats"""
         # Title
-        title = self.font_large.render(
-            "🚗 Road Navigation - Enhanced Edition", True, self.colors["ui_bg"]
-        )
+        title = self.font_large.render("Map Navigation", True, self.colors["ui_bg"])
         title_rect = title.get_rect(center=(self.width // 2, 25))
         self.screen.blit(title, title_rect)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Road Navigation Game - Main Entry Point
+Map Navigation Game - Main Entry Point
 """
 import time
 import numpy as np

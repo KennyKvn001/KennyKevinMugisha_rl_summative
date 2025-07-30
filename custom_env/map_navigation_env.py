@@ -1,5 +1,5 @@
 """
-Road Navigation Environment
+Map Navigation Environment
 Agent must follow roads to reach destinations
 """
 
