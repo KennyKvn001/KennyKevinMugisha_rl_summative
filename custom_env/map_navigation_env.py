@@ -103,6 +103,11 @@ class MapNavigationEnv(gym.Env):
         """Take a step in the environment"""
         self.steps += 1
 
+        # Convert action to int if it's a numpy array (from model.predict())
+        if hasattr(action, "item"):
+            action = action.item()
+        action = int(action)
+
         # Initialize info dictionary
         info = {
             "goal": self.current_goal,
