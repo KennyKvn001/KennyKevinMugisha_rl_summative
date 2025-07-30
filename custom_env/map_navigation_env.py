@@ -12,9 +12,9 @@ from custom_env.map_generator import create_road_network_map, is_valid_position
 from custom_env.renderer import Renderer
 
 
-class RoadNavigationEnv(gym.Env):
+class MapNavigationEnv(gym.Env):
     def __init__(self, grid_size=(15, 15), render_mode="human"):
-        super(RoadNavigationEnv, self).__init__()
+        super(MapNavigationEnv, self).__init__()
         self.grid_size = grid_size
         self.render_mode = render_mode
         self.renderer = Renderer(grid_size) if render_mode == "human" else None

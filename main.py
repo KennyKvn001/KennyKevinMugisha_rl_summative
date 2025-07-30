@@ -4,7 +4,7 @@ Road Navigation Game - Main Entry Point
 """
 import time
 import numpy as np
-from custom_env import RoadNavigationEnv
+from custom_env import MapNavigationEnv
 
 
 def main():
@@ -13,7 +13,7 @@ def main():
     print("=" * 40)
 
     # Create environment with larger grid for complex road network
-    env = RoadNavigationEnv(grid_size=(20, 20), render_mode="human")
+    env = MapNavigationEnv(grid_size=(20, 20), render_mode="human")
 
     # Reset environment
     obs, info = env.reset()
