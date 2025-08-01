@@ -46,7 +46,7 @@ class Renderer:
         self.game_width = grid_size[1] * tile_size
         self.game_height = grid_size[0] * tile_size
         self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption("🚗 Road Navigation - Enhanced Edition")
+        pygame.display.set_caption("Map Navigation - 1st Edition")
 
         # Enhanced color palette
         self.colors = {
@@ -148,6 +148,12 @@ class Renderer:
 
         # Draw header
         self._draw_header(info)
+
+        # Process events to keep window responsive
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
 
         pygame.display.flip()
 

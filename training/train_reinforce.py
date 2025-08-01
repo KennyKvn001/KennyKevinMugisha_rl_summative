@@ -52,7 +52,7 @@ def create_environment(render_mode=None):
 def train_agent(
     env,
     hyperparams=None,
-    episodes=1000,
+    episodes=10000,
     experiment_name="default",
 ):
     """Train a REINFORCE agent with the specified hyperparameters."""
@@ -67,7 +67,7 @@ def train_agent(
 
     # Default hyperparameters
     default_params = {
-        "learning_rate": 1e-3,
+        "learning_rate": 1e-4,
         "gamma": 0.99,
     }
 

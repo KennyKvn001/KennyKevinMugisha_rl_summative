@@ -2,11 +2,14 @@
 
 import sys
 import os
+import argparse
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from training.train_dqn import create_environment
-from stable_baselines3 import DQN
+from custom_env.map_navigation_env import MapNavigationEnv
+from stable_baselines3 import DQN, PPO, A2C
+
+# No longer need FlattenObservation - using CNN-compatible observations
 import numpy as np
 import time
 
@@ -14,8 +17,8 @@ import time
 def evaluate_agent(model, num_episodes=5, render_mode="human"):
     """Evaluate a trained agent."""
     try:
-        # Create environment with rendering
-        env = create_environment(render_mode=render_mode)
+        # Create environment with rendering - now uses 84x84 CNN-compatible observations
+        env = MapNavigationEnv(render_mode=render_mode, training_mode=False)
 
         rewards = []
         episode_lengths = []
@@ -40,9 +43,10 @@ def evaluate_agent(model, num_episodes=5, render_mode="human"):
                 episode_reward += reward
                 episode_length += 1
 
-                # Slow down rendering to make it viewable
+                # Render the environment
                 if render_mode == "human":
-                    time.sleep(0.01)
+                    env.render()
+                    time.sleep(0.1)
 
             rewards.append(episode_reward)
             episode_lengths.append(episode_length)
@@ -70,10 +74,33 @@ def evaluate_agent(model, num_episodes=5, render_mode="human"):
         return [], []
 
 
+def load_model(algorithm, model_path):
+    """Load the appropriate model based on algorithm."""
+    if algorithm == "dqn":
+        return DQN.load(model_path)
+    elif algorithm == "ppo":
+        return PPO.load(model_path)
+    elif algorithm == "a2c":
+        return A2C.load(model_path)
+    else:
+        raise ValueError(f"Unsupported algorithm: {algorithm}")
+
+
 def main():
-    model_name = "dqn_model_default_run"
-    model = DQN.load(model_name)
-    rewards, lengths = evaluate_agent(model, num_episodes=5, render_mode="human")
+    parser = argparse.ArgumentParser(description="Evaluate trained RL models")
+    parser.add_argument("--algo", choices=["dqn", "ppo", "a2c"], required=True)
+    parser.add_argument("--model_path", required=True)
+    parser.add_argument("--episodes", type=int, default=5)
+    parser.add_argument("--no_render", action="store_true")
+
+    args = parser.parse_args()
+
+    model = load_model(args.algo, args.model_path)
+    render_mode = None if args.no_render else "human"
+
+    rewards, lengths = evaluate_agent(
+        model, num_episodes=args.episodes, render_mode=render_mode
+    )
 
 
 if __name__ == "__main__":

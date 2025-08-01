@@ -28,12 +28,16 @@ class MapNavigationEnv(gym.Env):
         # Action space: 0=up, 1=down, 2=left, 3=right
         self.action_space = spaces.Discrete(4)
 
-        # Observation space: road map + agent position + goal position
+        # Observation space: scaled image for CNN compatibility (Atari-like)
+        # Scale from 15x15 to 84x84 (standard Atari size)
+        self.obs_size = 84
+        self.tile_size = self.obs_size // max(grid_size)  # Calculate scaling factor
+
         self.observation_space = spaces.Box(
             low=0,
-            high=2,
-            shape=(*grid_size, 3),  # 3 channels: map, agent, goal
-            dtype=np.float32,
+            high=255,
+            shape=(self.obs_size, self.obs_size, 3),  # 3 channels: map, agent, goal
+            dtype=np.uint8,
         )
 
         self.reset()
@@ -85,19 +89,48 @@ class MapNavigationEnv(gym.Env):
         return self._get_obs(), {}
 
     def _get_obs(self):
-        """Get observation with map, agent position, and goal position"""
-        obs = np.zeros((*self.grid_size, 3), dtype=np.float32)
+        """Get observation with tile-based scaling for CNN compatibility"""
+        # Create base observation at original grid size
+        base_obs = np.zeros((*self.grid_size, 3), dtype=np.uint8)
 
-        # Channel 0: Road map (0=obstacle, 1=road, 2=destination)
-        obs[:, :, 0] = self.road_map.astype(np.float32)
+        # Channel 0: Road map (0=obstacle, 128=road, 255=destination)
+        base_obs[:, :, 0] = self.road_map.astype(np.uint8) * 128
+        for dest_pos in self.destinations.values():
+            base_obs[dest_pos[0], dest_pos[1], 0] = 255
 
         # Channel 1: Agent position
-        obs[self.agent_pos[0], self.agent_pos[1], 1] = 1.0
+        base_obs[self.agent_pos[0], self.agent_pos[1], 1] = 255
 
         # Channel 2: Goal position
-        obs[self.goal_pos[0], self.goal_pos[1], 2] = 1.0
+        base_obs[self.goal_pos[0], self.goal_pos[1], 2] = 255
 
-        return obs
+        # Scale up using tile-based scaling
+        scaled_obs = self._scale_observation(base_obs)
+
+        return scaled_obs
+
+    def _scale_observation(self, base_obs):
+        """Scale observation from grid_size to obs_size using tile-based scaling"""
+        scaled_obs = np.zeros((self.obs_size, self.obs_size, 3), dtype=np.uint8)
+
+        # Calculate scaling factors
+        scale_h = self.obs_size / self.grid_size[0]
+        scale_w = self.obs_size / self.grid_size[1]
+
+        for row in range(self.grid_size[0]):
+            for col in range(self.grid_size[1]):
+                # Calculate pixel boundaries for this grid cell
+                start_row = int(row * scale_h)
+                end_row = int((row + 1) * scale_h)
+                start_col = int(col * scale_w)
+                end_col = int((col + 1) * scale_w)
+
+                # Fill the tile with the grid cell value
+                scaled_obs[start_row:end_row, start_col:end_col, :] = base_obs[
+                    row, col, :
+                ]
+
+        return scaled_obs
 
     def step(self, action):
         """Take a step in the environment"""
@@ -124,7 +157,7 @@ class MapNavigationEnv(gym.Env):
         moves = {0: (-1, 0), 1: (1, 0), 2: (0, -1), 3: (0, 1)}  # up, down, left, right
 
         # Initialize reward for this step
-        reward = -0.5  # Small penalty for each step to encourage efficiency
+        reward = -0.1  # Small penalty for each step to encourage efficiency
 
         if action in moves:
             delta = moves[action]
@@ -136,7 +169,7 @@ class MapNavigationEnv(gym.Env):
                 self.agent_pos = new_pos
             else:
                 # Invalid move - agent hits obstacle/wall
-                reward -= 5.0  # Penalty for hitting obstacles
+                reward -= 2.0  # Penalty for hitting obstacles
                 info["invalid_move"] = True
                 # Agent stays in current position
 
@@ -152,7 +185,7 @@ class MapNavigationEnv(gym.Env):
 
             # Goal completed! Give reward and check if mission complete
             self.goals_completed += 1
-            goal_reward = 15  # Reward for reaching a destination
+            goal_reward = 20  # Reward for reaching a destination
 
             # Check if all goals in mission are completed
             if self.current_goal_index < len(self.mission_goals) - 1:
@@ -170,8 +203,8 @@ class MapNavigationEnv(gym.Env):
                 info["goal_reached"] = True
             else:
                 # Mission complete! All goals visited
-                efficiency_bonus = max(0, (self.max_steps - self.steps) // 20)
-                reward = 50 + efficiency_bonus  # Large completion bonus
+                efficiency_bonus = max(0, (self.max_steps - self.steps) // 10)
+                reward = 100 + efficiency_bonus  # Large completion bonus
                 done = True
                 info["mission_complete"] = True
         else:
@@ -183,9 +216,9 @@ class MapNavigationEnv(gym.Env):
             # Distance-based incentive (modify existing reward from beginning)
             if hasattr(self, "previous_distance"):
                 if current_distance < self.previous_distance:
-                    reward += 1  # Small reward for getting closer
+                    reward += 0.5  # Small reward for getting closer
                 elif current_distance > self.previous_distance:
-                    reward -= 1  # Small penalty for moving away
+                    reward -= 0.2  # Small penalty for moving away
 
             self.previous_distance = current_distance
 

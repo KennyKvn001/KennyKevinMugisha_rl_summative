@@ -27,8 +27,8 @@ def create_environment(render_mode=None):
     if render_mode is not None:
         env.render_mode = render_mode
 
-    # Flatten observations for MlpPolicy (15, 15, 3) -> (675,)
-    env = FlattenObservation(env)
+    # Keep observations as 84x84x3 images for CnnPolicy
+    # No flattening needed - CNN can process spatial relationships
 
     return env
 
@@ -37,7 +37,7 @@ def train_agent(
     env,
     policy_type="CnnPolicy",
     hyperparams=None,
-    timesteps=2000000,
+    timesteps=100000,
     experiment_name="default",
 ):
     """Train a DQN agent with the specified policy and hyperparameters."""
@@ -51,7 +51,7 @@ def train_agent(
     # Default hyperparameters
     default_params = {
         "learning_rate": 1e-4,
-        "buffer_size": 500000,
+        "buffer_size": 50000,
         "learning_starts": 10000,
         "batch_size": 32,
         "gamma": 0.99,
@@ -123,8 +123,8 @@ def main():
     # Create the custom environment
     env = create_environment()
 
-    # Use MlpPolicy for the custom environment (flatten the Box observation space)
-    policy_type = "MlpPolicy"
+    # Use CnnPolicy for the custom environment (process 84x84x3 images)
+    policy_type = "CnnPolicy"
 
     print(f"Using {policy_type} for custom MapNavigationEnv")
 
