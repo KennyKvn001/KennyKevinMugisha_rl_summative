@@ -86,7 +86,7 @@ def train_agent(
     model.learn(total_timesteps=timesteps, callback=callback)
 
     # Save the trained model
-    model_path = f"model_{experiment_name}"
+    model_path = f"model2_{experiment_name}"
     model.save(model_path)
     print(f"Model saved as {model_path}.zip")
 

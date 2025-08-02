@@ -16,27 +16,32 @@ from utils.helpers import TrainingCallback
 
 
 def create_environment(render_mode=None):
-    """Create the custom MapNavigationEnv."""
+    """Create the custom MapNavigationEnv with dense rewards and flattened observations."""
     from utils.make_env import create_env
+    from dense_reward_wrapper import DenseRewardWrapper
+    from gymnasium.wrappers import FlattenObservation
 
-    # Create the custom environment
-    env = create_env()
+    # Create the custom environment for training
+    env = create_env(training_mode=True)
+    
+    # Add dense rewards for better learning signals
+    env = DenseRewardWrapper(env, dense_reward_scale=0.2)  # Conservative scale for A2C
+    
+    # Flatten observations for MLP policy (84x84x3 -> 21168 vector)
+    env = FlattenObservation(env)
 
     # Update render mode if specified
     if render_mode is not None:
         env.render_mode = render_mode
-
-    # Keep observations as 84x84x3 images for CnnPolicy
-    # No flattening needed - CNN can process spatial relationships
 
     return env
 
 
 def train_agent(
     env,
-    policy_type="CnnPolicy",
+    policy_type="MlpPolicy",
     hyperparams=None,
-    timesteps=500000,
+    timesteps=300000,
     experiment_name="default",
 ):
     """Train an A2C agent with the specified policy and hyperparameters."""
@@ -47,17 +52,17 @@ def train_agent(
     # Wrap environment with Monitor
     env = Monitor(env, log_dir)
 
-    # Default hyperparameters for A2C
+    # Optimized hyperparameters for A2C with dense rewards and MLP
     default_params = {
-        "learning_rate": 1e-4,
-        "n_steps": 20,
-        "gamma": 0.995,
-        "gae_lambda": 1.0,
-        "ent_coef": 0.01,
-        "vf_coef": 0.25,
-        "max_grad_norm": 0.5,
-        "rms_prop_eps": 1e-5,
-        "use_rms_prop": True,
+        "learning_rate": 3e-4,      # Good learning rate for MLP and dense rewards
+        "n_steps": 1024,            # Longer rollouts for better estimates
+        "gamma": 0.99,              # Standard discount factor
+        "gae_lambda": 0.95,         # Use GAE smoothing instead of raw returns
+        "ent_coef": 0.01,           # Conservative entropy for stability
+        "vf_coef": 0.5,             # Standard value function weight
+        "max_grad_norm": 0.5,       # Gradient clipping
+        "rms_prop_eps": 1e-5,       # RMSprop epsilon
+        "use_rms_prop": True,       # Use RMSprop optimizer
     }
 
     # Update with provided hyperparameters
@@ -120,16 +125,16 @@ def main():
     # Create the custom environment
     env = create_environment()
 
-    # Use CnnPolicy for the custom environment (process 84x84x3 images)
-    policy_type = "CnnPolicy"
+    # Use MlpPolicy for flattened observations (faster training, less complex)
+    policy_type = "MlpPolicy"
 
-    print(f"Using {policy_type} for custom MapNavigationEnv")
+    print(f"Using {policy_type} with Dense Rewards for custom MapNavigationEnv")
 
     # Train the agent (adjust timesteps as needed)
     model, training_stats = train_agent(
         env,
         policy_type=policy_type,
-        experiment_name="a2c",
+        experiment_name="a2c_dense_mlp",
     )
 
 

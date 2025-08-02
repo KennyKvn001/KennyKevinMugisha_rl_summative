@@ -39,8 +39,8 @@ def create_environment(render_mode=None):
     """Create the custom MapNavigationEnv."""
     from utils.make_env import create_env
 
-    # Create the custom environment
-    env = create_env()
+    # Create the custom environment for training
+    env = create_env(training_mode=True)
 
     # Update render mode if specified
     if render_mode is not None:
@@ -61,9 +61,13 @@ def train_agent(
     os.makedirs(log_dir, exist_ok=True)
 
     # Get environment dimensions - custom env has Box observation space
-    obs_shape = env.observation_space.shape  # Should be (grid_size, grid_size, 3)
-    obs_space = np.prod(obs_shape)  # Flatten for policy network
+    obs_shape = env.observation_space.shape  # Should be (84, 84, 3)
+    obs_space = np.prod(obs_shape)  # Flatten for policy network (will use CNN later)
     action_space = env.action_space.n
+    
+    print(f"Observation shape: {obs_shape}")
+    print(f"Flattened observation size: {obs_space}")
+    print(f"Action space: {action_space}")
 
     # Default hyperparameters
     default_params = {

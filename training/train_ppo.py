@@ -20,8 +20,8 @@ def create_environment(render_mode=None):
     """Create the custom MapNavigationEnv."""
     from utils.make_env import create_env
 
-    # Create the custom environment
-    env = create_env()
+    # Create the custom environment for training
+    env = create_env(training_mode=True)
 
     # Update render mode if specified
     if render_mode is not None:
