@@ -2,5 +2,4 @@
 pyproject.toml
 __pycache__/
 logs/
-tensorboard_logs/
 .vscode

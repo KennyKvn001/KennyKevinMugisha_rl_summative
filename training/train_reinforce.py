@@ -64,7 +64,7 @@ def train_agent(
     obs_shape = env.observation_space.shape  # Should be (84, 84, 3)
     obs_space = np.prod(obs_shape)  # Flatten for policy network (will use CNN later)
     action_space = env.action_space.n
-    
+
     print(f"Observation shape: {obs_shape}")
     print(f"Flattened observation size: {obs_space}")
     print(f"Action space: {action_space}")

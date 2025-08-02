@@ -18,15 +18,15 @@ from utils.helpers import TrainingCallback
 def create_environment(render_mode=None):
     """Create the custom MapNavigationEnv with dense rewards and flattened observations."""
     from utils.make_env import create_env
-    from dense_reward_wrapper import DenseRewardWrapper
+    from utils.dense_reward_wrapper import DenseRewardWrapper
     from gymnasium.wrappers import FlattenObservation
 
     # Create the custom environment for training
     env = create_env(training_mode=True)
-    
+
     # Add dense rewards for better learning signals
     env = DenseRewardWrapper(env, dense_reward_scale=0.2)  # Conservative scale for A2C
-    
+
     # Flatten observations for MLP policy (84x84x3 -> 21168 vector)
     env = FlattenObservation(env)
 
@@ -54,15 +54,15 @@ def train_agent(
 
     # Optimized hyperparameters for A2C with dense rewards and MLP
     default_params = {
-        "learning_rate": 3e-4,      # Good learning rate for MLP and dense rewards
-        "n_steps": 1024,            # Longer rollouts for better estimates
-        "gamma": 0.99,              # Standard discount factor
-        "gae_lambda": 0.95,         # Use GAE smoothing instead of raw returns
-        "ent_coef": 0.01,           # Conservative entropy for stability
-        "vf_coef": 0.5,             # Standard value function weight
-        "max_grad_norm": 0.5,       # Gradient clipping
-        "rms_prop_eps": 1e-5,       # RMSprop epsilon
-        "use_rms_prop": True,       # Use RMSprop optimizer
+        "learning_rate": 3e-4,  # Good learning rate for MLP and dense rewards
+        "n_steps": 1024,  # Longer rollouts for better estimates
+        "gamma": 0.99,  # Standard discount factor
+        "gae_lambda": 0.95,  # Use GAE smoothing instead of raw returns
+        "ent_coef": 0.01,  # Conservative entropy for stability
+        "vf_coef": 0.5,  # Standard value function weight
+        "max_grad_norm": 0.5,  # Gradient clipping
+        "rms_prop_eps": 1e-5,  # RMSprop epsilon
+        "use_rms_prop": True,  # Use RMSprop optimizer
     }
 
     # Update with provided hyperparameters
