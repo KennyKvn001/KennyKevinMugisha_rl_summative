@@ -37,59 +37,105 @@ class PolicyNetwork(nn.Module):
 
 class SimpleCNN(nn.Module):
     """Simple CNN for REINFORCE to preserve spatial information"""
-    
+
     def __init__(self, input_channels=3, output_dim=4):
         super(SimpleCNN, self).__init__()
-        
+
         # Simple CNN layers
         self.conv = nn.Sequential(
             nn.Conv2d(input_channels, 16, kernel_size=8, stride=4),  # 84x84 -> 20x20
             nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=4, stride=2),              # 20x20 -> 9x9
+            nn.Conv2d(16, 32, kernel_size=4, stride=2),  # 20x20 -> 9x9
             nn.ReLU(),
-            nn.Conv2d(32, 32, kernel_size=3, stride=1),              # 9x9 -> 7x7
+            nn.Conv2d(32, 32, kernel_size=3, stride=1),  # 9x9 -> 7x7
             nn.ReLU(),
         )
-        
+
         # Calculate flattened size
         self.conv_output_size = 32 * 7 * 7  # 1568
-        
+
         # Policy head
         self.policy = nn.Sequential(
             nn.Linear(self.conv_output_size, 128),
             nn.ReLU(),
             nn.Linear(128, output_dim),
-            nn.Softmax(dim=-1)
+            nn.Softmax(dim=-1),
         )
-    
+
     def forward(self, x):
         # Input: (batch, height, width, channels) -> (batch, channels, height, width)
         if len(x.shape) == 3:  # Single observation
             x = x.permute(2, 0, 1).unsqueeze(0)  # Add batch dimension
         else:  # Batch of observations
             x = x.permute(0, 3, 1, 2)
-        
+
         x = x.float() / 255.0  # Normalize to [0, 1]
-        
+
         conv_out = self.conv(x)
         flattened = conv_out.view(conv_out.size(0), -1)
         policy_out = self.policy(flattened)
-        
+
+        return policy_out
+
+
+class OptimizedCNN(nn.Module):
+    """Optimized CNN for REINFORCE with dense rewards"""
+
+    def __init__(self, input_channels=3, output_dim=4):
+        super(OptimizedCNN, self).__init__()
+
+        # Optimized CNN architecture
+        self.conv = nn.Sequential(
+            nn.Conv2d(input_channels, 32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.ReLU(),
+        )
+
+        # Calculate flattened size
+        self.conv_output_size = 64 * 7 * 7
+
+        # Policy head with dropout for regularization
+        self.policy = nn.Sequential(
+            nn.Linear(self.conv_output_size, 256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(128, output_dim),
+            nn.Softmax(dim=-1),
+        )
+
+    def forward(self, x):
+        if len(x.shape) == 3:
+            x = x.permute(2, 0, 1).unsqueeze(0)
+        else:
+            x = x.permute(0, 3, 1, 2)
+
+        x = x.float() / 255.0
+
+        conv_out = self.conv(x)
+        flattened = conv_out.view(conv_out.size(0), -1)
+        policy_out = self.policy(flattened)
+
         return policy_out
 
 
 class REINFORCEWrapper:
     """Wrapper to make REINFORCE model compatible with stable-baselines3 interface"""
-    
-    def __init__(self, policy, obs_shape, model_type='mlp'):
+
+    def __init__(self, policy, obs_shape, model_type="mlp"):
         self.policy = policy
         self.obs_shape = obs_shape
         self.model_type = model_type
-        
+
     def predict(self, obs, deterministic=True):
         """Predict action from observation"""
         with torch.no_grad():
-            if self.model_type == 'cnn':
+            if self.model_type in ["cnn", "optimized_cnn"]:
                 # Use CNN directly on image observations
                 obs_tensor = torch.tensor(obs, dtype=torch.float32)
                 probs = self.policy(obs_tensor)
@@ -98,7 +144,7 @@ class REINFORCEWrapper:
                 obs_flattened = obs.flatten()
                 obs_tensor = torch.tensor(obs_flattened, dtype=torch.float32)
                 probs = self.policy(obs_tensor)
-            
+
             if deterministic:
                 # Take the action with highest probability
                 action = torch.argmax(probs).item()
@@ -106,15 +152,27 @@ class REINFORCEWrapper:
                 # Sample from the distribution
                 dist = Categorical(probs)
                 action = dist.sample().item()
-                
+
         return action, None  # Return None for state (not used in evaluation)
 
 
-def evaluate_agent(model, num_episodes=5, render_mode="human"):
+def evaluate_agent(model, num_episodes=5, render_mode="human", algorithm=None):
     """Evaluate a trained agent."""
     try:
-        # Create environment with rendering - now uses 84x84 CNN-compatible observations
-        env = MapNavigationEnv(render_mode=render_mode, training_mode=False)
+        # Create environment based on algorithm type
+        if (
+            algorithm in ["a2c", "ppo"]
+            and hasattr(model, "policy")
+            and "FlattenExtractor" in str(model.policy)
+        ):
+            # For MLP-based models, use flattened observations
+            from gymnasium.wrappers import FlattenObservation
+
+            env = MapNavigationEnv(render_mode=render_mode, training_mode=False)
+            env = FlattenObservation(env)
+        else:
+            # For CNN-based models, use image observations
+            env = MapNavigationEnv(render_mode=render_mode, training_mode=False)
 
         rewards = []
         episode_lengths = []
@@ -166,7 +224,9 @@ def evaluate_agent(model, num_episodes=5, render_mode="human"):
 
         # Try again without rendering
         if render_mode == "human":
-            return evaluate_agent(model, num_episodes, render_mode=None)
+            return evaluate_agent(
+                model, num_episodes, render_mode=None, algorithm=algorithm
+            )
         return [], []
 
 
@@ -180,31 +240,37 @@ def load_model(algorithm, model_path):
         return A2C.load(model_path)
     elif algorithm == "reinforce":
         # Load PyTorch REINFORCE model
-        if not model_path.endswith('.pth'):
-            model_path += '.pth'
-            
-        checkpoint = torch.load(model_path, map_location='cpu')
-        
+        if not model_path.endswith(".pth"):
+            model_path += ".pth"
+
+        checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+
         # Extract model parameters
-        obs_shape = checkpoint['obs_shape']
-        action_space = checkpoint['action_space']
-        model_type = checkpoint.get('model_type', 'mlp')  # Default to MLP for old models
-        
+        obs_shape = checkpoint["obs_shape"]
+        action_space = checkpoint["action_space"]
+        model_type = checkpoint.get(
+            "model_type", "mlp"
+        )  # Default to MLP for old models
+
         # Recreate policy network based on type
-        if model_type == 'cnn':
+        if model_type == "optimized_cnn":
+            policy = OptimizedCNN(input_channels=3, output_dim=action_space)
+        elif model_type == "cnn":
             policy = SimpleCNN(input_channels=3, output_dim=action_space)
         else:
             # Old MLP model
             obs_space = np.prod(obs_shape)
             policy = PolicyNetwork(obs_space, action_space)
-        
-        policy.load_state_dict(checkpoint['policy_state_dict'])
+
+        policy.load_state_dict(checkpoint["policy_state_dict"])
         policy.eval()
-        
+
         # Return wrapped model
         return REINFORCEWrapper(policy, obs_shape, model_type)
     else:
-        raise ValueError(f"Unsupported algorithm: {algorithm}. Supported: dqn, ppo, a2c, reinforce")
+        raise ValueError(
+            f"Unsupported algorithm: {algorithm}. Supported: dqn, ppo, a2c, reinforce"
+        )
 
 
 def main():
@@ -220,7 +286,7 @@ def main():
     render_mode = None if args.no_render else "human"
 
     rewards, lengths = evaluate_agent(
-        model, num_episodes=args.episodes, render_mode=render_mode
+        model, num_episodes=args.episodes, render_mode=render_mode, algorithm=args.algo
     )
 
 
